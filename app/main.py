@@ -1,10 +1,28 @@
+import time
 from random import randrange
 from typing import Optional
+
+import psycopg2
 from fastapi import FastAPI, HTTPException, Response
+from psycopg2.extras import RealDictCursor
 from pydantic import BaseModel
 from starlette import status
 
+from . import models
+from .database import SessionLocal, engine
+
+models.Base.metadata.create_all(bind=engine)
+
 app = FastAPI()
+
+
+# Dependency
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 
 class Post(BaseModel):
@@ -13,6 +31,20 @@ class Post(BaseModel):
     published: bool = True
     rating: Optional[int] = None
 
+
+#
+#
+# while True:
+#     try:
+#         conn = psycopg2.connect(host='localhost', database="rest_api", user="fastapi", password="Caily2021",
+#                                 cursor_factory=RealDictCursor)
+#         cursor = conn.cursor()
+#         print("Database connection was successful")
+#         break
+#     except Exception as error:
+#         print("connecting to database failed")
+#         print("Error: ", error)
+#         time.sleep(2)
 
 my_posts = []
 
@@ -30,10 +62,12 @@ async def read_root():
 
 @app.get("/posts")
 async def get_posts():
-    return {"data": my_posts}
+    cursor.execute("""SELECT * FROM posts""")
+    posts = cursor.fetchall
+    return {"data": posts}
 
 
-@app.post("/posts",  status_code=status.HTTP_201_CREATED)
+@app.post("/posts", status_code=status.HTTP_201_CREATED)
 async def create_posts(post: Post):
     post_dict = post.dict()
     post_dict['id'] = randrange(0, 10000)
@@ -41,7 +75,7 @@ async def create_posts(post: Post):
     return {"posts": my_posts}
 
 
-@app.get("/posts/{post_id}",  status_code=status.HTTP_200_OK)
+@app.get("/posts/{post_id}", status_code=status.HTTP_200_OK)
 async def get_post(post_id: int):
     post = find_post(post_id)
     if not post:
